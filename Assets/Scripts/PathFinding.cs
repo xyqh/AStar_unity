@@ -86,7 +86,7 @@ public class PathFinding : MonoBehaviour {
                 Node neighbour = neighbours[i];
                 if (!neighbour.walkable || closedList.Contains(neighbour)) continue;
 
-                float gCost = node.gCost + GetDistance(node, neighbour);
+                float gCost = node.gCost + GetDistance(node, neighbour) + node.movementpenalty;
                 float hCost = GetDistance(neighbour, targetNode);
                 if (gCost + hCost < neighbour.fCost || !visited.Contains(neighbour))
                 {

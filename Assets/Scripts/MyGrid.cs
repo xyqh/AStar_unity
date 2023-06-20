@@ -4,11 +4,13 @@ using UnityEngine;
 
 public class MyGrid : MonoBehaviour {
     public bool displayGridGizmos;
-    public LayerMask layerMask;
+    public LayerMask unwalkableMask;
     public Vector2 gridWorldSize;
 	public float nodeRadius;
-
+    public TerrainType[] walkableRegions;
+    public Dictionary<int, int> walkableRegionsDictionary = new Dictionary<int, int>();
     public List<Node> path;
+    LayerMask walkableMask = 0;
 
     float nodeDiameter;
     int gridSizeX, gridSizeY;
@@ -19,6 +21,11 @@ public class MyGrid : MonoBehaviour {
         nodeDiameter = nodeRadius * 2;
         gridSizeX = Mathf.CeilToInt(gridWorldSize.x / nodeDiameter);
         gridSizeY = Mathf.CeilToInt(gridWorldSize.y / nodeDiameter);
+        for(int i = 0; i < walkableRegions.Length; ++i)
+        {
+            walkableMask.value |= walkableRegions[i].terrianMask.value;
+            walkableRegionsDictionary.Add((int)Mathf.Log(walkableRegions[i].terrianMask.value, 2), walkableRegions[i].terrianPenalty);
+        }
         CreateGrid();
     }
 
@@ -32,8 +39,19 @@ public class MyGrid : MonoBehaviour {
             for(int j = 0; j < gridSizeY; ++j)
             {
                 Vector3 worldPos = worldBottomLeft + Vector3.right * (i * nodeDiameter + nodeRadius) + Vector3.forward * (j * nodeDiameter + nodeRadius);
-                bool walkable = !Physics.CheckSphere(worldPos, nodeRadius, layerMask);
-                grid[i, j] = new Node(worldPos, walkable, i, j);
+                bool walkable = !Physics.CheckSphere(worldPos, nodeRadius, unwalkableMask);
+                int movementpenalty = 0;
+                // raycast
+                if (walkable)
+                {
+                    Ray ray = new Ray(worldPos + Vector3.up * 50, Vector3.down);
+                    RaycastHit hit;
+                    if (Physics.Raycast(ray, out hit, 100, walkableMask))
+                    {
+                        walkableRegionsDictionary.TryGetValue(hit.collider.gameObject.layer, out movementpenalty);
+                    }
+                }
+                grid[i, j] = new Node(worldPos, walkable, i, j, movementpenalty);
             }
         }
     }
@@ -87,5 +105,12 @@ public class MyGrid : MonoBehaviour {
         }
 
         return neighbours;
+    }
+
+    [System.Serializable]
+    public class TerrainType
+    {
+        public LayerMask terrianMask;
+        public int terrianPenalty;
     }
 }
