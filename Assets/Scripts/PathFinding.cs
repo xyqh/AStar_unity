@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using UnityEngine;
 
 public class PathFinding : MonoBehaviour {
@@ -12,53 +13,18 @@ public class PathFinding : MonoBehaviour {
 	// Use this for initialization
 	void Awake () {
         grid = GetComponent<MyGrid>();
-        requestManager = GetComponent<PathRequestManager>();
-    }
-	
-	// Update is called once per frame
-	void Update () {
     }
 
-    private int GetNodeHash(Node a)
+    public void FindPath(PathRequest request, Action<PathResult> callback)
     {
-        int x = a.gridX << 8;
-        int y = a.gridY;
-        return x | y;
-    }
+        Stopwatch sw = new Stopwatch();
+        sw.Start();
 
-    private int GetNodeWithNodeHash(Node a, Node b)
-    {
-        return (GetNodeHash(a) << 16) | GetNodeHash(b);
-    }
-
-    private float GetDistance(Node a, Node b)
-    {
-        int deltax = Mathf.Abs(a.gridX - b.gridX);
-        int deltay = Mathf.Abs(a.gridY - b.gridY);
-        if (deltax < deltay)
-        {
-            return 14 * deltax + 10 * (deltay - deltax);
-        }
-        return 14 * deltay + 10 * (deltax - deltay);
-    }
-
-    internal void StartFindPath(Vector3 startPos, Vector3 targetPos)
-    {
-        StartCoroutine(FindPath(startPos, targetPos));
-    }
-
-    IEnumerator FindPath(Vector3 startPos, Vector3 targetPos)
-    {
         Vector3[] waypoints = new Vector3[0];
         bool pathSuccess = false;
 
-        Node startNode = grid.NodeFromWorldPoint(startPos);
-        Node targetNode = grid.NodeFromWorldPoint(targetPos);
-
-        if (startNode == null || targetNode == null || !startNode.walkable || !targetNode.walkable)
-        {
-            yield return null;
-        }
+        Node startNode = grid.NodeFromWorldPoint(request.pathStart);
+        Node targetNode = grid.NodeFromWorldPoint(request.pathEnd);
 
         startNode.gCost = 0;
         startNode.hCost = GetDistance(startNode, targetNode);
@@ -76,6 +42,7 @@ public class PathFinding : MonoBehaviour {
 
             if (node == targetNode)
             {
+                sw.Stop();
                 pathSuccess = true;
                 break;
             }
@@ -108,13 +75,12 @@ public class PathFinding : MonoBehaviour {
             }
         }
 
-        yield return null;
-
         if (pathSuccess)
         {
             waypoints = RetracePath(startNode, targetNode);
-            requestManager.FinishedProcessingPath(waypoints, pathSuccess);
+            pathSuccess = waypoints.Length > 0;
         }
+        callback(new PathResult(waypoints, pathSuccess, request.callback));
     }
 
     public Vector3[] RetracePath(Node startNode, Node targetNode)
@@ -153,13 +119,24 @@ public class PathFinding : MonoBehaviour {
         return waypoints.ToArray();
     }
 
-    void printFCost(Heap<Node> heap)
+    private float GetDistance(Node a, Node b)
     {
-        string str = "";
-        for(int i = 0; i < heap.array.Count; ++i)
+        int deltax = Mathf.Abs(a.gridX - b.gridX);
+        int deltay = Mathf.Abs(a.gridY - b.gridY);
+        if (deltax < deltay)
         {
-            str += heap.array[i].fCost + " ";
+            return 14 * deltax + 10 * (deltay - deltax);
         }
-        Debug.Log("printFCost:" + str);
+        return 14 * deltay + 10 * (deltax - deltay);
     }
+
+    //void printFCost(Heap<Node> heap)
+    //{
+    //    string str = "";
+    //    for(int i = 0; i < heap.array.Count; ++i)
+    //    {
+    //        str += heap.array[i].fCost + " ";
+    //    }
+    //    Debug.Log("printFCost:" + str);
+    //}
 }
