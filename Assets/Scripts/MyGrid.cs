@@ -16,6 +16,11 @@ public class MyGrid : MonoBehaviour {
     int gridSizeX, gridSizeY;
     Node[,] grid;
 
+    int penaltyMin = int.MaxValue;
+    int penaltyMax = int.MinValue;
+    public int blurSizeCustom = 3;
+    public int obstacleProximityPenalty = 10;
+
     void Awake()
     {
         nodeDiameter = nodeRadius * 2;
@@ -40,18 +45,79 @@ public class MyGrid : MonoBehaviour {
             {
                 Vector3 worldPos = worldBottomLeft + Vector3.right * (i * nodeDiameter + nodeRadius) + Vector3.forward * (j * nodeDiameter + nodeRadius);
                 bool walkable = !Physics.CheckSphere(worldPos, nodeRadius, unwalkableMask);
-                int movementpenalty = 0;
+                int movementPenalty = 0;
+
                 // raycast
-                if (walkable)
+                Ray ray = new Ray(worldPos + Vector3.up * 50, Vector3.down);
+                RaycastHit hit;
+                if (Physics.Raycast(ray, out hit, 100, walkableMask))
                 {
-                    Ray ray = new Ray(worldPos + Vector3.up * 50, Vector3.down);
-                    RaycastHit hit;
-                    if (Physics.Raycast(ray, out hit, 100, walkableMask))
-                    {
-                        walkableRegionsDictionary.TryGetValue(hit.collider.gameObject.layer, out movementpenalty);
-                    }
+                    walkableRegionsDictionary.TryGetValue(hit.collider.gameObject.layer, out movementPenalty);
                 }
-                grid[i, j] = new Node(worldPos, walkable, i, j, movementpenalty);
+
+                if (!walkable)
+                {
+                    movementPenalty += obstacleProximityPenalty;
+                }
+
+                grid[i, j] = new Node(worldPos, walkable, i, j, movementPenalty);
+            }
+        }
+
+        BlurPenaltyMap(blurSizeCustom);
+    }
+
+    // 均值滤波
+    void BlurPenaltyMap(int blurSize)
+    {
+        int kernalSize = 2 * blurSize + 1;
+        int kernalExtens = blurSize;
+
+        int[,] newGrid = new int[gridSizeX, gridSizeY];
+        for(int y = 0; y < gridSizeY; ++y)
+        {
+            int filter = 0;
+            for(int x = -kernalExtens; x < kernalExtens; ++x)
+            {
+                int _x = Mathf.Clamp(x, 0, gridSizeX - 1);
+                filter += grid[_x, y].movementPenalty;
+            }
+
+            for(int x = 0; x < gridSizeX; ++x)
+            {
+                int addIndex = Mathf.Clamp(x + kernalExtens, 0, gridSizeX - 1);
+                filter += grid[addIndex, y].movementPenalty;
+                newGrid[x, y] = filter;
+                int reduceIndex = Mathf.Clamp(x - kernalExtens, 0, gridSizeX - 1);
+                filter -= grid[reduceIndex, y].movementPenalty;
+            }
+        }
+
+        for (int x = 0; x < gridSizeX; ++x)
+        {
+            int filter = 0;
+            for (int y = -kernalExtens; y < kernalExtens; ++y)
+            {
+                int _y = Mathf.Clamp(y, 0, gridSizeY - 1);
+                filter += newGrid[x, _y];
+            }
+
+            for (int y = 0; y < gridSizeY; ++y)
+            {
+                int addIndex = Mathf.Clamp(y + kernalExtens, 0, gridSizeY - 1);
+                filter += newGrid[x, addIndex];
+                int penalty = Mathf.FloorToInt((float)filter/kernalSize/kernalSize);
+                grid[x, y].movementPenalty = penalty;
+                if(penalty < penaltyMin)
+                {
+                    penaltyMin = penalty;
+                }
+                if (penalty > penaltyMax)
+                {
+                    penaltyMax = penalty;
+                }
+                int reduceIndex = Mathf.Clamp(y - kernalExtens, 0, gridSizeY - 1);
+                filter -= newGrid[x, reduceIndex];
             }
         }
     }
@@ -64,8 +130,9 @@ public class MyGrid : MonoBehaviour {
         {
             foreach(Node n in grid)
             {
-				Gizmos.color = (n.walkable)?Color.white : Color.red;
-                Gizmos.DrawCube(n.worldPosition, Vector3.one * (nodeDiameter - .1f));
+				Gizmos.color = Color.Lerp (Color.white, Color.black, Mathf.InverseLerp(penaltyMin, penaltyMax, n.movementPenalty));
+                Gizmos.color = n.walkable ? Gizmos.color : Color.red;
+                Gizmos.DrawCube(n.worldPosition, Vector3.one * nodeDiameter);
             }
         }
     }

@@ -8,7 +8,7 @@ public class Node : IHeapItem<Node> {
     public int gridY;
     public int heapIdx;
     public bool walkable;
-    public int movementpenalty;
+    public int movementPenalty;
 
     public int HeapIndex
     {
@@ -40,7 +40,7 @@ public class Node : IHeapItem<Node> {
         gridX = _gridx;
         gridY = _gridy;
         walkable = _walkable;
-        movementpenalty = _movementpenalty;
+        movementPenalty = _movementpenalty;
     }
 
     public override string ToString()
